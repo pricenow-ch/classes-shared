@@ -655,7 +655,8 @@ export default class Product {
   filterProductDefinitionsByProductDefinitionAndAttributeKey(
     attributeKey,
     productDefinition,
-    excludeAttributeKeys = []
+    excludeAttributeKeys = [],
+    includeMauiOnly = false
   ) {
     let filteredProductDefinitions = []
 
@@ -695,6 +696,12 @@ export default class Product {
     filteredProductDefinitions = filteredProductDefinitions.filter(
       (productDefinition) => !productDefinition.isMauiOnly()
     )
+
+    if (!includeMauiOnly) {
+      filteredProductDefinitions = filteredProductDefinitions.filter(
+        (prodDef) => !prodDef.isMauiOnly()
+      )
+    }
 
     // sort filtered product definitions
     return filteredProductDefinitions.sort(
@@ -902,6 +909,43 @@ export default class Product {
    */
   getAvailableDates(type = 'date') {
     return this.getAvailabilityDateRanges().getDateList(type)
+  }
+
+  /**
+   * Checks, if a product definition of this product has the full time span within validity dates and availability ranges
+   * @param productDefinitionInstance
+   * @param bookingStartInstance
+   * @return {boolean}
+   */
+  checkAvailableDates(productDefinitionInstance, bookingStartInstance) {
+    // get an list of available dates of the product
+    const availableDateList = this.getAvailableDates('date')
+    // get a list of dates of the product definition (booking date + duration days)
+    const durationDays = productDefinitionInstance.getDurationDays()
+    const endDate = new Date(
+      bookingStartInstance.getFullYear(),
+      bookingStartInstance.getMonth(),
+      bookingStartInstance.getDate() + durationDays - 1,
+      0,
+      0,
+      0,
+      0
+    )
+    const bookingDateList = DateHelper.getDateList(
+      bookingStartInstance,
+      endDate
+    )
+    for (let i = 0; i < bookingDateList.length; i++) {
+      const bookingDate = bookingDateList[i]
+      const foundAvailableDate = availableDateList.find((availableDate) => {
+        return availableDate.getTime() === bookingDate.getTime()
+      })
+      if (!foundAvailableDate) {
+        EventBus.$emit('notify', i18n.t('basket.dateNotAvailable'))
+        return false
+      }
+    }
+    return true
   }
 
   getCurrentSeasonStart() {

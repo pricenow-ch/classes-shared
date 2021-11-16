@@ -152,6 +152,16 @@ export default class Basket {
     // load default start date instance
     if (!startDateInstance) startDateInstance = this.getCurrentDateInstance()
 
+    // check that selected date and timespan is within available dates
+    const tmpBasketEntry = new BasketEntry({})
+    tmpBasketEntry.setValidFrom(startDateInstance)
+    tmpBasketEntry.setProductDefinitionInstance(definition)
+    const checkResult = this.checkAvailableDates([tmpBasketEntry])
+    if (!checkResult) {
+      EventBus.$emit('spinnerHide')
+      return false
+    }
+
     // set standard user data
     if (!userData) {
       userData = new UserData({
@@ -215,6 +225,13 @@ export default class Basket {
    * @returns {Promise<boolean>}
    */
   async updateBasketEntries(basketEntriesArray) {
+    // check validity dates
+    const checkResult = this.checkAvailableDates(basketEntriesArray)
+    if (!checkResult) {
+      EventBus.$emit('spinnerHide')
+      return false
+    }
+
     // prepare basket entries for the api
     const preparedBasketEntries = basketEntriesArray.map((basketEntry) => {
       basketEntry.getUserData().setCompleteForCheckout(basketEntry)
@@ -284,6 +301,13 @@ export default class Basket {
       basketEntryInstance.getProductDefinitionInstance()
     ) {
       if (showSpinner) EventBus.$emit('spinnerShow')
+
+      // check that selected date and timespan is within available dates
+      const checkResult = this.checkAvailableDates([basketEntryInstance])
+      if (!checkResult) {
+        EventBus.$emit('spinnerHide')
+        return false
+      }
 
       // is the basket entry ready to be complete for checkout ?
       basketEntryInstance
@@ -810,6 +834,40 @@ export default class Basket {
       if (!entry.isEntryInBookingState(state)) return false
     }
 
+    return true
+  }
+
+  /**
+   * Is the booked time span within the available dates of a product (considering availability range and validity dates)
+   * @param basketEntries: BasketEntry[]
+   * @return {boolean}
+   */
+  checkAvailableDates(basketEntries) {
+    if (!basketEntries || !basketEntries.length) {
+      throw new Error('No product definitions provided in duration check')
+    }
+    const shopModulesInstance = store.getters.getShopModulesInstance()
+    // iterate product definitions
+    for (let i = 0; i < basketEntries.length; i++) {
+      const basketEntry = basketEntries[i]
+      if (basketEntry.isRequiredEntry() || basketEntry.isEventEntry()) {
+        // no product would be found
+        continue
+      }
+      const bookingStart = basketEntry.getValidFrom()
+      const productDefinition = basketEntry.getProductDefinition()
+      const productId = productDefinition.getProductId()
+      const productInstance = shopModulesInstance.getProductInstanceByProductId(
+        productId
+      )
+      const checkResult = productInstance.checkAvailableDates(
+        productDefinition,
+        bookingStart
+      )
+      if (!checkResult) {
+        return false
+      }
+    }
     return true
   }
 
